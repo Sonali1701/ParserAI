@@ -25,7 +25,7 @@ Return ONLY the domain name (one word). Examples: healthcare, software, finance,
 
     try:
         message = client.messages.create(
-            model="claude-opus-4-1",
+            model="claude-haiku-4-5-20251001",
             max_tokens=50,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -79,7 +79,7 @@ Be generous with equivalent and transferable matches. For example:
 
     try:
         message = client.messages.create(
-            model="claude-opus-4-1",
+            model="claude-haiku-4-5-20251001",
             max_tokens=1000,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -144,7 +144,7 @@ Return JSON (no markdown):
 
     try:
         message = client.messages.create(
-            model="claude-opus-4-1",
+            model="claude-haiku-4-5-20251001",
             max_tokens=800,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -205,7 +205,7 @@ Rules:
 
     try:
         message = client.messages.create(
-            model="claude-opus-4-1",
+            model="claude-haiku-4-5-20251001",
             max_tokens=800,
             messages=[{"role": "user", "content": prompt}],
         )

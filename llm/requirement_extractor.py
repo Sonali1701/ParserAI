@@ -47,7 +47,7 @@ IMPORTANT FORMATTING RULES:
 
     try:
         message = client.messages.create(
-            model="claude-opus-4-1",
+            model="claude-haiku-4-5-20251001",
             max_tokens=1500,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -132,7 +132,7 @@ IMPORTANT FORMATTING RULES:
 
     try:
         message = client.messages.create(
-            model="claude-opus-4-1",
+            model="claude-haiku-4-5-20251001",
             max_tokens=2000,
             messages=[{"role": "user", "content": prompt}],
         )
