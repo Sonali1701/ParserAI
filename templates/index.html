@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParserAI — Candidate Intelligence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <nav class="topnav">
+        <div class="topnav-inner">
+            <div class="nav-brand">
+                <div class="nav-icon">
+                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                        <rect width="22" height="22" rx="6" fill="#4f46e5"/>
+                        <path d="M6 11h10M11 6l5 5-5 5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <span class="nav-name">ParserAI</span>
+                <span class="nav-divider"></span>
+                <span class="nav-tag">Healthcare Staffing Intelligence</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="page-wrap">
+
+        <!-- ── Upload ─────────────────────────────────────────────── -->
+        <section id="uploadSection" class="section-upload">
+            <div class="upload-hero">
+                <h1>Candidate Match Analysis</h1>
+                <p>Upload a resume and job description for an AI-powered fit assessment</p>
+            </div>
+
+            <div class="upload-card">
+                <form id="analyzeForm" enctype="multipart/form-data">
+
+                    <div class="upload-row">
+                        <!-- Resume drop zone -->
+                        <div class="upload-zone" id="resumeZone" onclick="document.getElementById('resume').click()">
+                            <input type="file" id="resume" name="resume" accept=".pdf,.docx,.txt">
+                            <div class="upload-icon">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M14 2v6h6M12 12v6M9 15l3-3 3 3" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </div>
+                            <div class="upload-zone-label">Resume</div>
+                            <div class="upload-zone-hint">PDF, DOCX or TXT · max 16 MB</div>
+                            <div class="upload-zone-file" id="resumeFilename"></div>
+                        </div>
+
+                        <div class="upload-divider">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                <path d="M5 12h14M12 5l7 7-7 7" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+
+                        <!-- JD drop zone -->
+                        <div class="upload-zone upload-zone-jd">
+                            <div class="jd-tabs">
+                                <button type="button" class="tab-btn active" data-tab="jd-upload">Upload File</button>
+                                <button type="button" class="tab-btn" data-tab="jd-text">Paste Text</button>
+                            </div>
+                            <div id="jd-upload" class="tab-content active">
+                                <div class="upload-zone-inner" onclick="document.getElementById('jd').click()">
+                                    <input type="file" id="jd" name="jd" accept=".pdf,.docx,.txt">
+                                    <div class="upload-icon">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                                            <path d="M9 12h6M9 16h6M17 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-4-6z" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </div>
+                                    <div class="upload-zone-label">Job Description</div>
+                                    <div class="upload-zone-hint">PDF, DOCX or TXT · max 16 MB</div>
+                                    <div class="upload-zone-file" id="jdFilename"></div>
+                                </div>
+                            </div>
+                            <div id="jd-text" class="tab-content">
+                                <textarea id="jdText" class="jd-textarea" placeholder="Paste the full job description here..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <circle cx="11" cy="11" r="8" stroke="white" stroke-width="2"/>
+                            <path d="m21 21-4.35-4.35" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        Run Analysis
+                    </button>
+
+                </form>
+            </div>
+        </section>
+
+        <!-- ── Loading ────────────────────────────────────────────── -->
+        <section id="loading" class="section-loading hidden">
+            <div class="loading-card">
+                <div class="loading-ring-wrap">
+                    <div class="loading-ring"></div>
+                </div>
+                <h2 class="loading-title">Analyzing documents</h2>
+                <p class="loading-sub">This takes 15–30 seconds</p>
+                <div class="loading-steps" id="loadingSteps">
+                    <div class="loading-step pending" data-step="0">
+                        <span class="step-dot"></span>Extracting candidate profile
+                    </div>
+                    <div class="loading-step pending" data-step="1">
+                        <span class="step-dot"></span>Analyzing job requirements
+                    </div>
+                    <div class="loading-step pending" data-step="2">
+                        <span class="step-dot"></span>Running semantic skill matching
+                    </div>
+                    <div class="loading-step pending" data-step="3">
+                        <span class="step-dot"></span>Generating AI assessment
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Results ────────────────────────────────────────────── -->
+        <section id="results" class="section-results hidden">
+
+            <!-- Score banner -->
+            <div class="results-banner" id="resultsBanner">
+                <div class="banner-info">
+                    <div class="banner-name" id="fitSummary">—</div>
+                    <div class="banner-role" id="fitLevel">—</div>
+                </div>
+
+                <div class="banner-score-wrap">
+                    <svg class="score-svg" viewBox="0 0 120 120">
+                        <circle class="score-track" cx="60" cy="60" r="52"/>
+                        <circle class="score-arc" id="scoreArc" cx="60" cy="60" r="52"
+                            stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
+                    </svg>
+                    <div class="score-label">
+                        <span class="score-num" id="scoreValue">—</span>
+                        <span class="score-pct-sign">%</span>
+                    </div>
+                </div>
+
+                <div class="banner-verdict" id="fitBadgeSection"></div>
+            </div>
+
+            <!-- 4-metric row -->
+            <div class="metrics-row">
+                <div class="metric-tile">
+                    <div class="metric-tile-top">
+                        <span class="metric-tile-label">Skills Match</span>
+                        <span class="metric-tile-value" id="skillScore">—</span>
+                    </div>
+                    <div class="metric-bar"><div class="metric-bar-fill" id="skillBar" style="width:0%"></div></div>
+                    <div class="metric-tile-sub" id="skillInsight"></div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-tile-top">
+                        <span class="metric-tile-label">Experience</span>
+                        <span class="metric-tile-value" id="expScore">—</span>
+                    </div>
+                    <div class="metric-bar"><div class="metric-bar-fill" id="expBar" style="width:0%"></div></div>
+                    <div class="metric-tile-sub" id="expExplanation"></div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-tile-top">
+                        <span class="metric-tile-label">Education</span>
+                        <span class="metric-tile-value" id="eduScore">—</span>
+                    </div>
+                    <div class="metric-bar"><div class="metric-bar-fill" id="eduBar" style="width:0%"></div></div>
+                    <div class="metric-tile-sub" id="eduInsight"></div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-tile-top">
+                        <span class="metric-tile-label">Certifications</span>
+                        <span class="metric-tile-value" id="certScore">—</span>
+                    </div>
+                    <div class="metric-bar"><div class="metric-bar-fill" id="certBar" style="width:0%"></div></div>
+                    <div class="metric-tile-sub" id="certInsight"></div>
+                </div>
+            </div>
+
+            <!-- Content grid -->
+            <div class="content-grid">
+
+                <!-- Main column -->
+                <div class="content-main">
+
+                    <!-- Skills card -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Skills Analysis</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="skill-group">
+                                <div class="skill-group-label matched-label">Matched Skills</div>
+                                <div id="matchedSkills" class="chip-row"></div>
+                            </div>
+                            <div class="skill-group">
+                                <div class="skill-group-label missing-label">Missing Skills</div>
+                                <div id="missingSkills" class="chip-row"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Certifications card -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Certifications</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="skill-group">
+                                <div class="skill-group-label matched-label">Present</div>
+                                <div id="matchedCerts" class="chip-row"></div>
+                            </div>
+                            <div class="skill-group">
+                                <div class="skill-group-label missing-label">Missing</div>
+                                <div id="missingCerts" class="chip-row"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI Assessment -->
+                    <div class="card" id="intelligentAnalysisSection">
+                        <div class="card-header">
+                            <h3 class="card-title">AI Assessment</h3>
+                            <div id="domainInfo" class="domain-tag"></div>
+                        </div>
+                        <div class="card-body">
+                            <div id="smartAnalysisDetails"></div>
+                            <div id="skillAnalysisDetails" class="mt-16"></div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Side column -->
+                <div class="content-side">
+
+                    <!-- Candidate profile -->
+                    <div class="card" id="candidateProfileCard">
+                        <div class="card-header">
+                            <h3 class="card-title">Candidate Profile</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="candidateProfile"></div>
+                        </div>
+                    </div>
+
+                    <!-- Experience fit -->
+                    <div class="card" id="experienceAnalysisCard">
+                        <div class="card-header">
+                            <h3 class="card-title">Experience Fit</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="recency-note" id="expRecency"></p>
+                            <div id="experienceAnalysisDetails"></div>
+                        </div>
+                    </div>
+
+                    <!-- Education -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Education</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="matchedFields" class="chip-row"></div>
+                        </div>
+                    </div>
+
+                    <!-- Improvements -->
+                    <div class="card" id="smartAnalysisCard">
+                        <div class="card-header">
+                            <h3 class="card-title">Improvements</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="improvements"></div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="results-footer">
+                <button onclick="resetForm()" class="btn-ghost">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    New Analysis
+                </button>
+            </div>
+
+        </section>
+
+        <div id="errorMessage" class="error-toast hidden"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
