@@ -3,14 +3,29 @@ Semantic matching for skills, roles, and requirements.
 Uses Claude to understand context and find equivalent skills.
 """
 
+import re
+import json
 from anthropic import Anthropic
 
 client = Anthropic()
 
 
+def _parse_json(text: str) -> dict:
+    """Robustly extract a JSON object from LLM output."""
+    text = text.strip()
+    fence = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
+    if fence:
+        text = fence.group(1).strip()
+    elif not text.startswith('{'):
+        obj = re.search(r'\{[\s\S]*\}', text)
+        if obj:
+            text = obj.group(0)
+    return json.loads(text)
+
+
 def detect_domain(resume_text: str, jd_text: str) -> str:
     """
-    Detect the job domain/industry
+    Detect the job domain/industry.
     Returns: 'healthcare', 'tech', 'finance', 'sales', 'general', etc.
     """
     prompt = f"""Analyze these two documents and identify the job domain/industry.
@@ -38,12 +53,6 @@ Return ONLY the domain name (one word). Examples: healthcare, software, finance,
 def find_equivalent_skills(candidate_skills: list, required_skills: list) -> dict:
     """
     Find equivalent or transferable skills using semantic understanding.
-    Returns: {
-        'exact_matches': [...],
-        'equivalent_matches': [...],
-        'transferable_skills': [...],
-        'missing_skills': [...]
-    }
     """
     if not required_skills:
         return {
@@ -61,7 +70,7 @@ CANDIDATE HAS:
 JOB REQUIRES:
 {', '.join(required_skills[:20])}
 
-Return ONLY valid JSON (no markdown):
+Return ONLY a raw JSON object with no markdown, no prose:
 {{
     "exact_matches": ["skill1", "skill2"],
     "equivalent_matches": ["skill that equals required skill"],
@@ -71,11 +80,7 @@ Return ONLY valid JSON (no markdown):
     "analysis": "One sentence on how skills align"
 }}
 
-Be generous with equivalent and transferable matches. For example:
-- "SQL" matches "Database Management"
-- "JavaScript" matches "Web Development"
-- "Project Management" transfers to many roles
-- "Problem-solving" is transferable everywhere"""
+Be generous with equivalent and transferable matches."""
 
     try:
         message = client.messages.create(
@@ -83,26 +88,15 @@ Be generous with equivalent and transferable matches. For example:
             max_tokens=1000,
             messages=[{"role": "user", "content": prompt}],
         )
-
-        import json
-
-        text = message.content[0].text.strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.strip().rstrip("`")
-
-        data = json.loads(text)
-        return data
-    except:
+        return _parse_json(message.content[0].text)
+    except Exception as e:
         return {
             "exact_matches": [],
             "equivalent_matches": [],
             "transferable_skills": [],
             "missing_critical": required_skills,
             "missing_nice_to_have": [],
-            "analysis": "Unable to analyze",
+            "analysis": f"Skill analysis unavailable: {e}",
         }
 
 
@@ -111,14 +105,8 @@ def analyze_experience_relevance(
 ) -> dict:
     """
     Intelligently analyze if candidate's experience matches role requirements.
-    Handles career transitions, different titles, etc.
     """
-    prompt = f"""Analyze if candidate's experience fits this role. Consider:
-- Career progression
-- Transferable experience
-- Domain expertise
-- Leadership level
-- Industry knowledge
+    prompt = f"""Analyze if candidate's experience fits this role.
 
 CANDIDATE EXPERIENCE:
 - Years: {resume_experience.get('years', 0)}
@@ -130,9 +118,9 @@ JOB REQUIREMENTS:
 - Domain: {domain}
 - Role level: {jd_requirements.get('level', 'mid-level')}
 
-Return JSON (no markdown):
+Return ONLY a raw JSON object with no markdown, no prose:
 {{
-    "experience_match_score": <0-100>,
+    "experience_match_score": 0,
     "years_assessment": "text",
     "progression_fit": "text",
     "domain_knowledge": "text",
@@ -148,18 +136,8 @@ Return JSON (no markdown):
             max_tokens=800,
             messages=[{"role": "user", "content": prompt}],
         )
-
-        import json
-
-        text = message.content[0].text.strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.strip().rstrip("`")
-
-        return json.loads(text)
-    except:
+        return _parse_json(message.content[0].text)
+    except Exception as e:
         return {
             "experience_match_score": 50,
             "years_assessment": "Unable to assess",
@@ -168,7 +146,7 @@ Return JSON (no markdown):
             "concern_areas": [],
             "strengths": [],
             "role_readiness": "Maybe",
-            "recommendation": "Manual review recommended",
+            "recommendation": f"Manual review recommended: {e}",
         }
 
 
@@ -186,7 +164,7 @@ RESUME (excerpt):
 JOB DESCRIPTION (excerpt):
 {jd_text[:800]}
 
-Return ONLY valid JSON (no markdown). All list items must be SHORT bullet points (under 12 words each).
+Return ONLY a raw JSON object with no markdown, no prose. All list items must be SHORT bullet points (under 12 words each).
 {{
     "overall_fit": "Strong Yes / Yes / Maybe / No",
     "confidence": "High / Medium / Low",
@@ -209,18 +187,8 @@ Rules:
             max_tokens=800,
             messages=[{"role": "user", "content": prompt}],
         )
-
-        import json
-
-        text = message.content[0].text.strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.strip().rstrip("`")
-
-        return json.loads(text)
-    except:
+        return _parse_json(message.content[0].text)
+    except Exception as e:
         return {
             "overall_fit": "Manual review",
             "confidence": "Low",
@@ -228,5 +196,5 @@ Rules:
             "gaps": [],
             "recent_domain_experience": "Unable to assess",
             "career_fit": "Unknown",
-            "risk_flags": [],
+            "risk_flags": [f"Analysis error: {e}"],
         }

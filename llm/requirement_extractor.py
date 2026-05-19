@@ -3,15 +3,37 @@ Intelligent JD requirement extraction.
 Handles various JD formats and extracts structured requirements.
 """
 
+import re
+import json
 from anthropic import Anthropic
 
 client = Anthropic()
 
 
+def _parse_json(text: str) -> dict:
+    """
+    Robustly extract a JSON object from LLM output.
+    Handles markdown fences, leading/trailing prose, and extra backticks.
+    """
+    text = text.strip()
+
+    # Strip markdown code fences (``` or ```json)
+    fence = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
+    if fence:
+        text = fence.group(1).strip()
+    elif not text.startswith('{'):
+        # Find the first { ... } block in case there is prose before/after
+        obj = re.search(r'\{[\s\S]*\}', text)
+        if obj:
+            text = obj.group(0)
+
+    return json.loads(text)
+
+
 def extract_requirements(jd_text: str) -> dict:
     """
     Extract structured requirements from any JD format.
-    Handles bullet points, paragraphs, or unstructured text.
+    Handles bullet points, paragraphs, tables, etc.
     """
     prompt = f"""Extract structured requirements from this job description.
 Handle ANY format - bullet points, paragraphs, tables, etc.
@@ -19,12 +41,12 @@ Handle ANY format - bullet points, paragraphs, tables, etc.
 JD TEXT:
 {jd_text}
 
-Return ONLY JSON (no markdown):
+Return ONLY a raw JSON object with no markdown, no prose, no explanation:
 {{
     "job_title": "exact title",
     "required_skills": ["skill1", "skill2"],
     "nice_to_have_skills": ["skill1", "skill2"],
-    "required_experience_years": <number>,
+    "required_experience_years": 0,
     "required_education": ["degree1", "degree2"],
     "required_certifications": ["cert1", "cert2"],
     "required_attributes": ["attribute1", "attribute2"],
@@ -36,13 +58,9 @@ Return ONLY JSON (no markdown):
     "specialized_knowledge": ["knowledge1"]
 }}
 
-Be comprehensive. Extract ALL mentioned requirements.
-Distinguish between required (must-have) and nice-to-have.
-Be generous in identifying skills and attributes.
-
 IMPORTANT FORMATTING RULES:
-- required_certifications: canonical short names matching what a candidate would list (e.g., "rn license", "bls", "acls") - no license numbers or state info
-- required_skills: ONLY the 4-8 core clinical skills that truly differentiate candidates (e.g., specialty unit type, key procedures). Do NOT list generic nursing tasks (medication administration, IV therapy, patient care) that every RN has. Include the unit specialty (e.g., "labor and delivery", "l&d", "sdu") and key clinical competencies specific to this role.
+- required_certifications: canonical short names only (e.g., "rn license", "bls", "acls") - no license numbers or state info
+- required_skills: ONLY the 4-8 core clinical skills that truly differentiate candidates. Do NOT list generic nursing tasks every RN has. Include the unit specialty (e.g., "labor and delivery", "sdu", "icu") and key clinical competencies.
 - If profession/specialty is stated (RN, SDU, ICU, L&D) add the specialty as a required skill"""
 
     try:
@@ -51,33 +69,9 @@ IMPORTANT FORMATTING RULES:
             max_tokens=1500,
             messages=[{"role": "user", "content": prompt}],
         )
-
-        import json
-
-        text = message.content[0].text.strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.strip().rstrip("`")
-
-        return json.loads(text)
+        return _parse_json(message.content[0].text)
     except Exception as e:
-        return {
-            "job_title": "Unknown",
-            "required_skills": [],
-            "nice_to_have_skills": [],
-            "required_experience_years": 0,
-            "required_education": [],
-            "required_certifications": [],
-            "required_attributes": [],
-            "role_level": "unknown",
-            "key_responsibilities": [],
-            "must_haves": [],
-            "nice_to_haves": [],
-            "industry_domain": "general",
-            "specialized_knowledge": [],
-        }
+        raise RuntimeError(f"JD extraction failed: {e}")
 
 
 def extract_candidate_profile(resume_text: str) -> dict:
@@ -91,13 +85,13 @@ Handle ANY format - chronological, functional, combination, etc.
 RESUME TEXT:
 {resume_text}
 
-Return ONLY JSON (no markdown):
+Return ONLY a raw JSON object with no markdown, no prose, no explanation:
 {{
     "name": "name if present",
     "job_title": "current or most recent title",
     "summary": "professional summary (2-3 sentences)",
-    "years_total_experience": <number>,
-    "years_relevant_experience": <number>,
+    "years_total_experience": 0,
+    "years_relevant_experience": 0,
     "current_role_level": "entry/mid/senior/lead",
     "core_competencies": ["competency1", "competency2"],
     "technical_skills": ["skill1", "skill2"],
@@ -109,7 +103,7 @@ Return ONLY JSON (no markdown):
         {{
             "title": "job title",
             "company": "company",
-            "duration_years": <number>,
+            "duration_years": 0,
             "achievements": ["achievement1"],
             "keywords": ["keyword1"]
         }}
@@ -126,7 +120,7 @@ Infer experience years from dates if not stated.
 Identify career progression patterns.
 
 IMPORTANT FORMATTING RULES:
-- certifications_licenses: canonical short names ONLY (e.g., "rn license", "bls", "acls", "ccrn", "fire card") - no license numbers, expiry dates, state names, or issuer names
+- certifications_licenses: canonical short names ONLY (e.g., "rn license", "bls", "acls", "ccrn") - no license numbers, expiry dates, state names, or issuer names
 - technical_skills: include clinical unit specialties actually worked (e.g., "sdu", "icu", "telemetry", "med-surg") AND EMR systems
 - education_fields: use simple field names like "nursing", "nursing science" (not full degree names)"""
 
@@ -136,35 +130,6 @@ IMPORTANT FORMATTING RULES:
             max_tokens=2000,
             messages=[{"role": "user", "content": prompt}],
         )
-
-        import json
-
-        text = message.content[0].text.strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.strip().rstrip("`")
-
-        return json.loads(text)
+        return _parse_json(message.content[0].text)
     except Exception as e:
-        return {
-            "name": "Unknown",
-            "job_title": "Unknown",
-            "summary": "",
-            "years_total_experience": 0,
-            "years_relevant_experience": 0,
-            "current_role_level": "unknown",
-            "core_competencies": [],
-            "technical_skills": [],
-            "soft_skills": [],
-            "certifications_licenses": [],
-            "education_degrees": [],
-            "education_fields": [],
-            "work_history": [],
-            "industries_experience": [],
-            "career_progression": "Unknown",
-            "unique_strengths": [],
-            "potential_gaps": [],
-            "career_trajectory": "unknown",
-        }
+        raise RuntimeError(f"Resume extraction failed: {e}")
