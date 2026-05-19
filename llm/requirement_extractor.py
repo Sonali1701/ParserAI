@@ -9,64 +9,56 @@ from anthropic import Anthropic
 
 client = Anthropic()
 
+# Cap inputs so Haiku output stays well within max_tokens
+_RESUME_MAX_CHARS = 4000
+_JD_MAX_CHARS     = 3000
+
 
 def _parse_json(text: str) -> dict:
-    """
-    Robustly extract a JSON object from LLM output.
-    Handles markdown fences, leading/trailing prose, and extra backticks.
-    """
+    """Robustly extract a JSON object from LLM output."""
     text = text.strip()
-
-    # Strip markdown code fences (``` or ```json)
     fence = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
     if fence:
         text = fence.group(1).strip()
     elif not text.startswith('{'):
-        # Find the first { ... } block in case there is prose before/after
         obj = re.search(r'\{[\s\S]*\}', text)
         if obj:
             text = obj.group(0)
-
     return json.loads(text)
 
 
 def extract_requirements(jd_text: str) -> dict:
-    """
-    Extract structured requirements from any JD format.
-    Handles bullet points, paragraphs, tables, etc.
-    """
-    prompt = f"""Extract structured requirements from this job description.
-Handle ANY format - bullet points, paragraphs, tables, etc.
+    """Extract structured requirements from any JD format."""
+    prompt = f"""Extract requirements from this job description. Return ONLY raw JSON, no prose.
 
-JD TEXT:
-{jd_text}
+JD:
+{jd_text[:_JD_MAX_CHARS]}
 
-Return ONLY a raw JSON object with no markdown, no prose, no explanation:
+JSON schema (use exactly these keys, keep arrays short):
 {{
-    "job_title": "exact title",
-    "required_skills": ["skill1", "skill2"],
-    "nice_to_have_skills": ["skill1", "skill2"],
+    "job_title": "title",
+    "required_skills": ["up to 8 core differentiating skills only"],
+    "nice_to_have_skills": ["skill1"],
     "required_experience_years": 0,
-    "required_education": ["degree1", "degree2"],
-    "required_certifications": ["cert1", "cert2"],
-    "required_attributes": ["attribute1", "attribute2"],
-    "role_level": "entry/mid/senior/lead",
-    "key_responsibilities": ["resp1", "resp2", "resp3"],
-    "must_haves": ["requirement1"],
-    "nice_to_haves": ["requirement1"],
-    "industry_domain": "detected domain",
+    "required_education": ["bsn"],
+    "required_certifications": ["rn license", "bls", "acls"],
+    "required_attributes": ["attribute1"],
+    "role_level": "entry|mid|senior|lead",
+    "key_responsibilities": ["resp1", "resp2"],
+    "must_haves": ["req1"],
+    "nice_to_haves": ["req1"],
+    "industry_domain": "healthcare",
     "specialized_knowledge": ["knowledge1"]
 }}
 
-IMPORTANT FORMATTING RULES:
-- required_certifications: canonical short names only (e.g., "rn license", "bls", "acls") - no license numbers or state info
-- required_skills: ONLY the 4-8 core clinical skills that truly differentiate candidates. Do NOT list generic nursing tasks every RN has. Include the unit specialty (e.g., "labor and delivery", "sdu", "icu") and key clinical competencies.
-- If profession/specialty is stated (RN, SDU, ICU, L&D) add the specialty as a required skill"""
+Rules:
+- required_certifications: short canonical names only (e.g. "rn license", "bls") no license numbers or states
+- required_skills: 4-8 clinical differentiators only, NOT generic tasks every RN does; include unit specialty (sdu, icu, l&d)"""
 
     try:
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=1500,
+            max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
         )
         return _parse_json(message.content[0].text)
@@ -75,59 +67,41 @@ IMPORTANT FORMATTING RULES:
 
 
 def extract_candidate_profile(resume_text: str) -> dict:
-    """
-    Extract comprehensive candidate profile from resume.
-    Works with ANY resume format.
-    """
-    prompt = f"""Extract a comprehensive candidate profile from this resume.
-Handle ANY format - chronological, functional, combination, etc.
+    """Extract candidate profile from resume — only fields used in scoring."""
+    prompt = f"""Extract candidate info from this resume. Return ONLY raw JSON, no prose, keep values concise.
 
-RESUME TEXT:
-{resume_text}
+RESUME:
+{resume_text[:_RESUME_MAX_CHARS]}
 
-Return ONLY a raw JSON object with no markdown, no prose, no explanation:
+JSON schema (use exactly these keys):
 {{
-    "name": "name if present",
-    "job_title": "current or most recent title",
-    "summary": "professional summary (2-3 sentences)",
-    "years_total_experience": 0,
+    "name": "Full Name",
+    "job_title": "most recent title",
     "years_relevant_experience": 0,
-    "current_role_level": "entry/mid/senior/lead",
-    "core_competencies": ["competency1", "competency2"],
-    "technical_skills": ["skill1", "skill2"],
-    "soft_skills": ["skill1", "skill2"],
+    "current_role_level": "entry|mid|senior|lead",
+    "core_competencies": ["comp1", "comp2"],
+    "technical_skills": ["sdu", "icu", "epic"],
+    "soft_skills": ["communication"],
     "certifications_licenses": ["rn license", "bls", "acls"],
-    "education_degrees": ["bsn", "bachelor"],
-    "education_fields": ["nursing", "nursing science"],
+    "education_degrees": ["bsn"],
+    "education_fields": ["nursing"],
     "work_history": [
-        {{
-            "title": "job title",
-            "company": "company",
-            "duration_years": 0,
-            "achievements": ["achievement1"],
-            "keywords": ["keyword1"]
-        }}
+        {{"title": "RN", "company": "Hospital", "duration_years": 2, "keywords": ["sdu", "telemetry"]}}
     ],
-    "industries_experience": ["industry1", "industry2"],
-    "career_progression": "description",
-    "unique_strengths": ["strength1", "strength2"],
-    "potential_gaps": ["gap1", "gap2"],
-    "career_trajectory": "up/stable/lateral/down"
+    "industries_experience": ["healthcare"],
+    "career_trajectory": "up|stable|lateral|down"
 }}
 
-Be thorough. Extract ALL skills, certifications, and achievements.
-Infer experience years from dates if not stated.
-Identify career progression patterns.
-
-IMPORTANT FORMATTING RULES:
-- certifications_licenses: canonical short names ONLY (e.g., "rn license", "bls", "acls", "ccrn") - no license numbers, expiry dates, state names, or issuer names
-- technical_skills: include clinical unit specialties actually worked (e.g., "sdu", "icu", "telemetry", "med-surg") AND EMR systems
-- education_fields: use simple field names like "nursing", "nursing science" (not full degree names)"""
+Rules:
+- certifications_licenses: short canonical names ONLY (e.g. "rn license", "bls") no numbers, dates, states, or issuers
+- technical_skills: include unit specialties worked (sdu, icu, telemetry, med-surg) and EMR systems
+- work_history: max 4 entries, keywords array max 5 items, no achievements field
+- education_fields: simple names like "nursing" not full degree titles"""
 
     try:
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=2000,
+            max_tokens=1500,
             messages=[{"role": "user", "content": prompt}],
         )
         return _parse_json(message.content[0].text)
