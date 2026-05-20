@@ -22,6 +22,7 @@ def _normalize_cert(cert: str) -> str:
         c = c.replace(state, '')
     c = re.sub(r'[–—]', ' ', c)
     c = re.sub(r'\(.*?\)', '', c)
+    c = re.sub(r'[-–—]\s*$', '', c)    # trailing hyphen/dash left after stripping state/issuer
     c = ' '.join(c.split())
     return c
 
