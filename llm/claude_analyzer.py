@@ -42,6 +42,7 @@ For years of experience, estimate from work history if not stated."""
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=1024,
+        temperature=0,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -105,6 +106,7 @@ Provide analysis in JSON format:
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=1024,
+        temperature=0,
         messages=[{"role": "user", "content": prompt}],
     )
 

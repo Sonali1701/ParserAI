@@ -21,6 +21,7 @@ Reply with ONE word only. Examples: healthcare, software, finance, sales, legal,
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=20,
+            temperature=0,
             messages=[{"role": "user", "content": prompt}],
         )
         return message.content[0].text.strip().lower().split()[0]
@@ -85,6 +86,7 @@ For healthcare/nursing: unit specialties (SDU, ICU, L&D), procedures, and certif
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=1000,
+            temperature=0,
             tools=[tool],
             tool_choice={"type": "tool", "name": "skill_match_report"},
             messages=[{"role": "user", "content": prompt}],
@@ -134,6 +136,7 @@ ROLE NEEDS: {jd_requirements.get('years', 0)} years minimum, level: {jd_requirem
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=800,
+            temperature=0,
             tools=[tool],
             tool_choice={"type": "tool", "name": "experience_report"},
             messages=[{"role": "user", "content": prompt}],
@@ -202,6 +205,7 @@ Rules:
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=1000,
+            temperature=0,
             tools=[tool],
             tool_choice={"type": "tool", "name": "smart_analysis_report"},
             messages=[{"role": "user", "content": prompt}],
