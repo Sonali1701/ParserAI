@@ -156,32 +156,61 @@ ROLE NEEDS: {jd_requirements.get('years', 0)} years minimum, level: {jd_requirem
 
 
 def generate_smart_analysis(
-    resume_text: str, jd_text: str, initial_score: float
+    resume_text: str, jd_text: str, score_breakdown: dict
 ) -> dict:
-    """Generate concise recruiter analysis using Claude tool use."""
-    prompt = f"""You are an expert healthcare recruiter. Assess candidate fit concisely.
+    """
+    Generate the authoritative recruiter assessment using Claude tool use.
+    The AI sees the algorithmic breakdown and produces an overall_fit_score
+    that is constrained to match its overall_fit verdict.
+    """
+    skill   = score_breakdown.get("skill_match", {})
+    exp     = score_breakdown.get("experience_match", {})
+    edu     = score_breakdown.get("education_match", {})
+    cert    = score_breakdown.get("certification_match", {})
+
+    prompt = f"""You are an expert healthcare recruiter. Assess this candidate holistically.
 
 RESUME (excerpt):
-{resume_text[:800]}
+{resume_text[:1500]}
 
 JOB DESCRIPTION (excerpt):
-{jd_text[:800]}
+{jd_text[:1500]}
+
+ALGORITHMIC BREAKDOWN (use as a signal, not the final word):
+- Skills: {skill.get('score', 0)}% — {skill.get('exact_matches', 0)}/{skill.get('total_required', 0)} required matched
+- Experience: {exp.get('score', 0)}% — {exp.get('candidate_years', 0)} yrs vs {exp.get('required_years', 0)} required
+- Education: {edu.get('score', 0)}%
+- Certifications: {cert.get('score', 0)}% — missing: {', '.join(cert.get('missing', []) or []) or 'none'}
+
+Decide overall_fit using real recruiter judgment. A candidate can be Strong Yes even with mediocre skill-match if they bring directly relevant recent experience. They can be No despite 100% on every metric if there are red flags (expired license, wrong specialty, employment gaps, location mismatch).
+
+CRITICAL: overall_fit_score MUST be inside the band of overall_fit:
+- Strong Yes -> 85 to 100
+- Yes        -> 70 to 84
+- Maybe      -> 50 to 69
+- No         -> 0 to 49
 
 Rules:
-- strengths/gaps: 3-5 bullets each, under 12 words per bullet, be specific (e.g. "7 yrs L&D travel RN experience")
-- gaps: real gaps only, empty list if none
-- risk_flags: license expiry, employment gaps, location mismatch — empty list if clean
+- strengths/gaps: 3-5 bullets, under 12 words each, specific (e.g. "7 yrs L&D travel RN experience")
+- gaps: real gaps only; empty list if none
+- risk_flags: license expiry, employment gaps, location mismatch, specialty mismatch; empty if clean
 - recent_domain_experience: one short sentence on how recent and directly relevant the most recent role is"""
 
     tool = {
         "name": "smart_analysis_report",
-        "description": "Report structured recruiter assessment",
+        "description": "Report the authoritative recruiter assessment",
         "input_schema": {
             "type": "object",
             "properties": {
                 "overall_fit": {
                     "type": "string",
                     "enum": ["Strong Yes", "Yes", "Maybe", "No"]
+                },
+                "overall_fit_score": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "description": "0-100 holistic fit score. MUST be in the band matching overall_fit: Strong Yes 85-100, Yes 70-84, Maybe 50-69, No 0-49."
                 },
                 "confidence": {
                     "type": "string",
@@ -196,8 +225,8 @@ Rules:
                 },
                 "risk_flags": {"type": "array", "items": {"type": "string"}}
             },
-            "required": ["overall_fit", "confidence", "strengths", "gaps",
-                         "recent_domain_experience", "career_fit", "risk_flags"]
+            "required": ["overall_fit", "overall_fit_score", "confidence", "strengths",
+                         "gaps", "recent_domain_experience", "career_fit", "risk_flags"]
         }
     }
 
@@ -210,14 +239,38 @@ Rules:
             tool_choice={"type": "tool", "name": "smart_analysis_report"},
             messages=[{"role": "user", "content": prompt}],
         )
-        return message.content[0].input
+        result = message.content[0].input
+        result["overall_fit_score"] = _reconcile_score(
+            result.get("overall_fit_score", 50), result.get("overall_fit", "Maybe")
+        )
+        return result
     except Exception as e:
         return {
-            "overall_fit": "Manual review",
+            "overall_fit": "Maybe",
+            "overall_fit_score": 50,
             "confidence": "Low",
             "strengths": [],
             "gaps": [],
             "recent_domain_experience": "Unable to assess",
-            "career_fit": "Unknown",
+            "career_fit": "Lateral",
             "risk_flags": [f"Analysis error: {e}"],
         }
+
+
+def _reconcile_score(score: int, verdict: str) -> int:
+    """
+    Defensive: clamp the AI's score into the band matching its verdict.
+    Prevents any chance of overall_fit='No' with score=90 or vice versa.
+    """
+    bands = {
+        "Strong Yes": (85, 100),
+        "Yes":        (70, 84),
+        "Maybe":      (50, 69),
+        "No":         (0, 49),
+    }
+    lo, hi = bands.get(verdict, (50, 69))
+    try:
+        s = int(score)
+    except (TypeError, ValueError):
+        s = (lo + hi) // 2
+    return max(lo, min(hi, s))

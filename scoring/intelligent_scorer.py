@@ -389,39 +389,51 @@ def _calculate_cert_match(candidate_data: dict, jd_data: dict) -> dict:
     }
 
 
-def categorize_fit(overall_score: float, domain: str = "general") -> dict:
+_FIT_CATEGORIES = {
+    "Strong Yes": {
+        "level": "Exceptional Fit",
+        "color": "green",
+        "recommendation": "Strong Yes - Highly recommended",
+        "priority": "urgent",
+        "next_step": "Interview immediately",
+    },
+    "Yes": {
+        "level": "Good Fit",
+        "color": "blue",
+        "recommendation": "Yes - Good candidate",
+        "priority": "high",
+        "next_step": "Schedule interview",
+    },
+    "Maybe": {
+        "level": "Moderate Fit",
+        "color": "orange",
+        "recommendation": "Maybe - Has potential but gaps exist",
+        "priority": "medium",
+        "next_step": "Consider with other candidates",
+    },
+    "No": {
+        "level": "Poor Fit",
+        "color": "red",
+        "recommendation": "No - Significant gaps in requirements",
+        "priority": "low",
+        "next_step": "Continue searching",
+    },
+}
+
+
+def categorize_fit(overall_score: float, domain: str = "general", verdict: str = None) -> dict:
     """
-    Categorize candidate fit based on score and domain requirements.
+    Map the AI's overall_fit verdict to the displayed fit category.
+    Falls back to score-based bucketing only when no verdict is supplied
+    (e.g. LLM call failed).
     """
+    if verdict and verdict in _FIT_CATEGORIES:
+        return _FIT_CATEGORIES[verdict]
+
     if overall_score >= 85:
-        return {
-            "level": "Exceptional Fit",
-            "color": "green",
-            "recommendation": "Strong Yes - Highly recommended",
-            "priority": "urgent",
-            "next_step": "Interview immediately",
-        }
-    elif overall_score >= 70:
-        return {
-            "level": "Good Fit",
-            "color": "blue",
-            "recommendation": "Yes - Good candidate",
-            "priority": "high",
-            "next_step": "Schedule interview",
-        }
-    elif overall_score >= 50:
-        return {
-            "level": "Moderate Fit",
-            "color": "orange",
-            "recommendation": "Maybe - Has potential but gaps exist",
-            "priority": "medium",
-            "next_step": "Consider with other candidates",
-        }
-    else:
-        return {
-            "level": "Poor Fit",
-            "color": "red",
-            "recommendation": "No - Significant gaps in requirements",
-            "priority": "low",
-            "next_step": "Continue searching",
-        }
+        return _FIT_CATEGORIES["Strong Yes"]
+    if overall_score >= 70:
+        return _FIT_CATEGORIES["Yes"]
+    if overall_score >= 50:
+        return _FIT_CATEGORIES["Maybe"]
+    return _FIT_CATEGORIES["No"]

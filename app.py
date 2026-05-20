@@ -132,14 +132,24 @@ def analyze():
                 domain
             )
 
-            # Calculate intelligent score — pass semantic skill analysis so both numbers agree
+            # Calculate algorithmic per-category scores (used for transparency tiles)
             score_result = calculate_semantic_match(candidate_profile, jd_requirements, domain, skill_analysis)
 
-            # Categorize fit
-            fit_category = categorize_fit(score_result["overall_score"], domain)
+            # AI does the holistic assessment, sees the algorithmic breakdown, and
+            # returns the authoritative overall_fit + overall_fit_score
+            smart_analysis = generate_smart_analysis(resume_text, jd_text, score_result)
 
-            # Generate smart analysis
-            smart_analysis = generate_smart_analysis(resume_text, jd_text, score_result["overall_score"])
+            # Use AI's holistic score as the headline. This guarantees the score
+            # always lives in the band of the AI's verdict (Strong Yes 85-100, etc).
+            ai_score = smart_analysis.get("overall_fit_score")
+            if isinstance(ai_score, (int, float)):
+                score_result["overall_score"] = round(float(ai_score), 2)
+
+            # Fit category comes from the AI verdict so the badge and score agree
+            fit_category = categorize_fit(
+                score_result["overall_score"], domain,
+                verdict=smart_analysis.get("overall_fit"),
+            )
 
             return jsonify({
                 'success': True,
